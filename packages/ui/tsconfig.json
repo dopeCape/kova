@@ -1,0 +1,20 @@
+{
+  "extends": "@repo/typescript-config/ui.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "declarationDir": "dist",
+    "incremental": false,
+    "composite": false,
+    "tsBuildInfoFile": null,
+    "rootDir": "src"
+  },
+  "include": [
+    "src/**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "**/*.test.*",
+    "**/*.spec.*"
+  ]
+}

@@ -1,0 +1,126 @@
+<ui_design_prompt>
+  <project_context>
+    <name>KOVA</name>
+    <type>Open-source deployment manager</type>
+    <target_audience>Professional developers and DevOps engineers</target_audience>
+    <positioning>Premium alternative to Vercel, but not serverless</positioning>
+  </project_context>
+
+  <design_philosophy>
+    <core_principle>Extreme minimalism with surgical precision</core_principle>
+    <aesthetic>Sophisticated, clean, terminal-inspired, developer-first</aesthetic>
+    <personality>Professional, confident, understated luxury</personality>
+    <inspiration>Swiss design, premium CLI tools, architect portfolios</inspiration>
+  </design_philosophy>
+
+  <color_palette>
+    <primary_color>
+      <color>Emerald-500 (#10b981)</color>
+      <usage>EXTREMELY SPARINGLY - only for critical state indicators and primary CTA buttons</usage>
+      <rule>Less than 5% of the interface should use this color</rule>
+    </primary_color>
+    <base_colors>
+      <background>Pure black (#000000) and zinc-950</background>
+      <surface>Zinc-900/20 with backdrop blur</surface>
+      <text_primary>White and zinc-100</text_primary>
+      <text_secondary>Zinc-400 and zinc-500</text_secondary>
+      <borders>Zinc-800 and zinc-900</borders>
+    </base_colors>
+    <accent_colors>
+      <success>Emerald-500 (only for live/success states)</success>
+      <warning>Zinc-400 (for building/pending states)</warning>
+      <error>Zinc-500 (for error states, NOT red)</error>
+    </accent_colors>
+  </color_palette>
+
+  <typography>
+    <primary_font>Default system fonts with clean, modern feel</primary_font>
+    <code_font>Monospace for technical elements, terminal commands, and data</code_font>
+    <hierarchy>
+      <h1>Large, bold, minimal tracking</h1>
+      <h2>Medium weight, subtle spacing</h2>
+      <body>Clean, readable, good line height</body>
+      <code>Monospace, smaller size, muted colors</code>
+    </hierarchy>
+  </typography>
+
+  <layout_principles>
+    <spacing>Generous whitespace, breathable layouts</spacing>
+    <grid>Clean grid systems, no overcrowding</grid>
+    <alignment>Consistent alignment, clear visual hierarchy</alignment>
+    <density>Medium information density, not cramped</density>
+  </layout_principles>
+
+  <key_screens>
+    <login_screen>
+      <layout>Split screen - left side branding/features, right side form</layout>
+      <form_style>Minimal inputs with underline borders or clean rounded borders</form_style>
+      <branding>Large "deployctl" with emerald accent on "ctl" only</branding>
+    </login_screen>
+    <dashboard>
+      <layout>Masonry/grid layout for project cards</layout>
+      <header>Clean title with minimal stats, single primary CTA button</header>
+      <project_cards>Dark cards with subtle borders, minimal emerald accents</project_cards>
+      <color_restriction>Use emerald ONLY for live status dots and main deploy button</color_restriction>
+    </dashboard>
+  </key_screens>
+
+  <component_guidelines>
+    <buttons>
+      <primary>Emerald background, white text, subtle shadow</primary>
+      <secondary>Transparent with zinc border, subtle hover states</secondary>
+      <ghost>Text only with hover states</ghost>
+    </buttons>
+    <status_indicators>
+      <live>Small emerald dot with subtle pulse animation</live>
+      <building>Zinc-400 dot with ping animation</building>
+      <error>Zinc-500 dot, no red</error>
+    </status_indicators>
+    <cards>
+      <background>Zinc-900/20 with backdrop blur</background>
+      <borders>Zinc-800, subtle hover to zinc-700</borders>
+      <hover_effects>Subtle background change, NO color additions</hover_effects>
+    </cards>
+  </component_guidelines>
+
+  <background_treatment>
+    <base>Pure black or zinc-950</base>
+    <pattern>Extremely subtle dot pattern using emerald at 2-5% opacity</pattern>
+    <gradients>Minimal gradients from slate-950 to emerald-950 at very low opacity</gradients>
+    <blur_orbs>Large, subtle blur circles in emerald at 3% opacity maximum</blur_orbs>
+  </background_treatment>
+
+  <critical_restrictions>
+    <color_overuse>NEVER use emerald for multiple elements on the same screen</color_overuse>
+    <bright_colors>Avoid any bright blues, purples, oranges, or reds</bright_colors>
+    <gradients>No rainbow gradients or multiple color gradients</gradients>
+    <decorative_elements>No unnecessary visual decoration</decorative_elements>
+  </critical_restrictions>
+
+  <interaction_design>
+    <hover_states>Subtle, refined, mostly opacity and scale changes</hover_states>
+    <animations>Minimal, purposeful, high-quality transitions</animations>
+    <focus_states>Clean emerald borders or subtle emerald glows</focus_states>
+    <loading_states>Simple, elegant, not distracting</loading_states>
+  </interaction_design>
+
+  <tone_and_voice>
+    <interface_copy>Technical but approachable, CLI-inspired language</interface_copy>
+    <terminology>Use developer terminology: "deployments", "instances", "builds"</terminology>
+    <personality>Confident, minimal, no marketing fluff</personality>
+  </tone_and_voice>
+
+  <what_not_to_do>
+    <avoid_colors>No blues, purples, oranges, or multiple accent colors</avoid_colors>
+    <avoid_patterns>No busy backgrounds or complex patterns</avoid_patterns>
+    <avoid_overdesign>No unnecessary visual elements or decorations</avoid_overdesign>
+    <avoid_color_spam>Don't use emerald for icons, text, borders everywhere</avoid_color_spam>
+  </what_not_to_do>
+
+  <success_criteria>
+    <looks_expensive>Should feel like premium software worth $500/month</looks_expensive>
+    <developer_focused>Appeals to senior developers and technical leaders</developer_focused>
+    <distinctly_minimal>Stands out from typical SaaS rainbow dashboards</distinctly_minimal>
+    <color_restraint>Uses emerald sparingly, mostly monochromatic</color_restraint>
+  </success_criteria>
+</ui_design_prompt>
