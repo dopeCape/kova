@@ -1,2 +1,4 @@
 **/whiteboard.md
-
+.turbo
+node_modules
+dist

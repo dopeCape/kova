@@ -1,0 +1,33 @@
+{
+  "name": "kova",
+  "version": "0.0.1",
+  "description": "open source deployment manager",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "lint": "turbo run lint",
+    "test": "turbo run test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dopeCape/kova.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/dopeCape/kova/issues"
+  },
+  "homepage": "https://github.com/dopeCape/kova#readme",
+  "packageManager": "npm@10.9.2",
+  "devDependencies": {
+    "turbo": "^2.5.4"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ]
+}
