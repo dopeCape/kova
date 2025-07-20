@@ -1,4 +1,10 @@
 **/whiteboard.md
 .turbo
 node_modules
+tmp
 dist
+build
+out
+bin
+
+
