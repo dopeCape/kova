@@ -8,6 +8,7 @@
     "test": "go test ./...",
     "lint": "golangci-lint run",
     "clean": "rm -rf bin",
-    "tidy": "go mod tidy"
+    "tidy": "go mod tidy",
+    "migrate-db": "make migrate-up"
   }
 }

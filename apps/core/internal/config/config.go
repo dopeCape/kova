@@ -14,7 +14,7 @@ type Config struct {
 type ServerConfig struct {
 	Port string
 	Host string
-	Env  string // dev, prod, test
+	Env  string
 }
 
 type DatabaseConfig struct {
@@ -46,7 +46,7 @@ func Load() *Config {
 			SSLMode:  getEnv("DB_SSLMODE", "disable"),
 		},
 		Auth: AuthConfig{
-			JWTSecret: getEnv("JWT_SECRET", "your-secret-key-change-in-production"),
+			JWTSecret: getEnv("JWT_SECRET", "849cff22c983fb7a0ee113339c6486893c83f1e5d485ef2a797b43f802b21709"),
 		},
 	}
 }

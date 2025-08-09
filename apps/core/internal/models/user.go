@@ -10,7 +10,7 @@ type User struct {
 	ID           string    `json:"id"`
 	Username     string    `json:"username"`
 	Email        string    `json:"email"`
-	PasswordHash string    `json:"-"` // Never expose in JSON
+	PasswordHash string    `json:"-"`
 	CreatedAt    time.Time `json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`
 }
@@ -32,11 +32,10 @@ type ChangePasswordRequest struct {
 }
 
 type LoginRequest struct {
-	Login    string `json:"login" validate:"required"` // Can be email or username
+	Login    string `json:"login" validate:"required"`
 	Password string `json:"password" validate:"required"`
 }
 
-// HashPassword hashes a plain text password
 func (u *User) HashPassword(password string) error {
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
@@ -46,13 +45,11 @@ func (u *User) HashPassword(password string) error {
 	return nil
 }
 
-// CheckPassword verifies a password against the hash
 func (u *User) CheckPassword(password string) bool {
 	err := bcrypt.CompareHashAndPassword([]byte(u.PasswordHash), []byte(password))
 	return err == nil
 }
 
-// ToPublic returns user without sensitive fields
 func (u *User) ToPublic() *User {
 	return &User{
 		ID:        u.ID,

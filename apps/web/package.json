@@ -9,10 +9,11 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@repo/ui": "*",
     "lucide-react": "^0.525.0",
     "next": "15.4.1",
+    "next-auth": "^5.0.0-beta.29",
     "react": "19.1.0",
-    "@repo/ui": "*",
     "react-dom": "19.1.0"
   },
   "devDependencies": {

@@ -1,0 +1,6 @@
+POST {{BASE_URL}}/api/v1/register
+
+{
+  "username": "test_user",
+  "password": "test_password"
+}

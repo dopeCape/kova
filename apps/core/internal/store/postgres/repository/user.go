@@ -22,7 +22,6 @@ func (s *Store) CreateUser(ctx context.Context, user *models.User) error {
 		return err
 	}
 
-	// Convert CreateUserRow to User model
 	*user = models.User{
 		ID:           dbUser.ID,
 		Username:     dbUser.Username,
