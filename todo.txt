@@ -1,3 +1,4 @@
-3. create a install script.
-  - creaet user
+1. create the cli/tui
+  - install.
+  - create user..
 5. create a logger. 

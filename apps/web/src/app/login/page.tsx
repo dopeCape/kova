@@ -14,7 +14,6 @@ const DeploymentManager = () => {
   const { data: session, status } = useSession();
   const router = useRouter();
 
-  // Only redirect if authenticated, don't block on loading
   useEffect(() => {
     if (status === 'authenticated') {
       router.push('/');
