@@ -11,7 +11,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
-	"text/template"
 	"time"
 
 	"golang.org/x/crypto/bcrypt"
@@ -65,7 +64,6 @@ func Install(config *InstallConfig) error {
 		{"Detecting network configuration", detectNetwork},
 		{"Creating environment files", createEnvironmentFiles},
 		{"Generating docker-compose.yml", generateDockerCompose},
-		{"Building application images", buildImages},
 		{"Starting services", startServices},
 		{"Running database migrations", runMigrations},
 		{"Creating admin user", createAdminUser},
@@ -191,33 +189,6 @@ func generateSecrets(config *InstallConfig) error {
 	return nil
 }
 
-func detectNetwork(config *InstallConfig) error {
-	// Get local IP
-	localIP, err := getLocalIP()
-	if err != nil {
-		config.LocalIP = "localhost"
-	} else {
-		config.LocalIP = localIP
-	}
-
-	// Get public IP
-	publicIP, err := getPublicIP()
-	if err != nil {
-		config.PublicIP = config.LocalIP
-	} else {
-		config.PublicIP = publicIP
-	}
-
-	// Set API URL based on domain or IP
-	if config.Domain != "" {
-		config.PublicAPIURL = fmt.Sprintf("https://%s/api", config.Domain)
-	} else {
-		config.PublicAPIURL = fmt.Sprintf("http://%s/api", config.PublicIP)
-	}
-
-	return nil
-}
-
 func createEnvironmentFiles(config *InstallConfig) error {
 	// Create .env for core API
 	envContent := fmt.Sprintf(`# Kova Core API Environment
@@ -273,181 +244,370 @@ func generateDockerCompose(config *InstallConfig) error {
 	// Determine if we should build locally or use pre-built images
 	usePrebuiltImages := os.Getenv("KOVA_USE_PREBUILT") != "false"
 
-	var tmpl string
-	if usePrebuiltImages {
-		tmpl = `version: '3.8'
-
-services:
-  # Reverse Proxy & Load Balancer
-  traefik:
-    image: traefik:v3.0
-    container_name: kova-traefik
-    restart: unless-stopped
-    command:
-      - --api.dashboard=true
-      - --api.insecure=true
-      - --providers.docker=true
-      - --providers.docker.exposedbydefault=false
-      - --entrypoints.web.address=:80
-      - --entrypoints.websecure.address=:443
-      {{- if .Domain }}
-      - --certificatesresolvers.letsencrypt.acme.email={{.AdminEmail}}
-      - --certificatesresolvers.letsencrypt.acme.storage=/data/acme.json
-      - --certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web
-      {{- end }}
-    ports:
-      - "80:80"
-      - "443:443"
-      - "8080:8080"
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-      - {{.DataDir}}/traefik:/data
-    networks:
-      - kova_network
-
-  # PostgreSQL Database
-  postgres:
-    image: postgres:15-alpine
-    container_name: kova-postgres
-    restart: unless-stopped
-    environment:
-      POSTGRES_DB: kova
-      POSTGRES_USER: kova
-      POSTGRES_PASSWORD: {{.PostgresPassword}}
-      PGDATA: /var/lib/postgresql/data/pgdata
-    volumes:
-      - {{.DataDir}}/postgres:/var/lib/postgresql/data
-    networks:
-      - kova_network
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U kova -d kova"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  # Redis Cache
-  redis:
-    image: redis:7-alpine
-    container_name: kova-redis
-    restart: unless-stopped
-    command: redis-server --appendonly yes --requirepass {{.RedisPassword}}
-    volumes:
-      - {{.DataDir}}/redis:/data
-    networks:
-      - kova_network
-    healthcheck:
-      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  # Kova Core API
-  kova-api:
-    image: {{.RegistryURL}}/{{.Repository}}-api:{{.Version}}
-    container_name: kova-api
-    restart: unless-stopped
-    env_file:
-      - .env
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    networks:
-      - kova_network
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.api.rule=Host(\"{{.Domain | default .PublicIP}}\") && PathPrefix(\"/api\")"
-      {{- if .Domain }}
-      - "traefik.http.routers.api.tls.certresolver=letsencrypt"
-      {{- end }}
-      - "traefik.http.services.api.loadbalancer.server.port=8080"
-
-  # Kova Dashboard
-  kova-dashboard:
-    image: {{.RegistryURL}}/{{.Repository}}-dashboard:{{.Version}}
-    container_name: kova-dashboard
-    restart: unless-stopped
-    env_file:
-      - .env.dashboard
-    depends_on:
-      - kova-api
-    networks:
-      - kova_network
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.dashboard.rule=Host(\"{{.Domain | default .PublicIP}}\")"
-      {{- if .Domain }}
-      - "traefik.http.routers.dashboard.tls.certresolver=letsencrypt"
-      {{- end }}
-      - "traefik.http.services.dashboard.loadbalancer.server.port=3000"
-
-networks:
-  kova_network:
-    driver: bridge
-
-volumes:
-  postgres_data:
-  redis_data:
-  traefik_data:
-`
-	} else {
-		// Local build version (your existing template)
-		tmpl = `version: '3.8'
-
-services:
-  # ... (same as before but with build context instead of image) ...
-  kova-api:
-    build:
-      context: .
-      dockerfile: apps/core/Dockerfile
-    # ... rest of config
-  
-  kova-dashboard:
-    build:
-      context: .
-      dockerfile: apps/web/Dockerfile
-    # ... rest of config
-`
-	}
-
 	// Set default values for registry and version
 	if config.RegistryURL == "" {
 		config.RegistryURL = "ghcr.io"
 	}
 	if config.Repository == "" {
-		config.Repository = "dopeCape/kova" // This should be configurable
+		config.Repository = "dopecape/kova"
 	}
 	if config.Version == "" {
 		config.Version = "latest"
 	}
 
-	t, err := template.New("docker-compose").
-		Funcs(template.FuncMap{
-			"default": func(def, val string) string {
-				if val == "" {
-					return def
-				}
-				return val
-			},
-		}).
-		Parse(tmpl)
-	if err != nil {
-		return fmt.Errorf("failed to parse docker-compose template: %w", err)
+	// Generate the docker-compose content based on configuration
+	var composeContent string
+
+	if usePrebuiltImages {
+		fmt.Printf("   Using pre-built images\n")
+		composeContent = generatePrebuiltCompose(config)
+	} else {
+		fmt.Printf("   Building images locally\n")
+		composeContent = generateLocalBuildCompose(config)
 	}
 
 	composeFile := filepath.Join(config.InstallDir, "docker-compose.yml")
-	f, err := os.Create(composeFile)
-	if err != nil {
+	if err := os.WriteFile(composeFile, []byte(composeContent), 0644); err != nil {
 		return fmt.Errorf("failed to create docker-compose.yml: %w", err)
 	}
-	defer f.Close()
 
-	if err := t.Execute(f, config); err != nil {
-		return fmt.Errorf("failed to generate docker-compose.yml: %w", err)
+	// Validate the generated YAML
+	if err := validateDockerCompose(composeFile); err != nil {
+		// Print the problematic content for debugging
+		fmt.Printf("Generated docker-compose.yml content:\n%s\n", composeContent)
+		return fmt.Errorf("generated docker-compose.yml is invalid: %w", err)
 	}
 
 	return nil
+}
+
+// Add validation function
+func validateDockerCompose(composeFile string) error {
+	cmd := exec.Command("docker-compose", "-f", composeFile, "config", "--quiet")
+	if err := cmd.Run(); err != nil {
+		return err
+	}
+	return nil
+}
+
+func generatePrebuiltCompose(config *InstallConfig) string {
+	// Build Traefik command list
+	traefikCommands := []string{
+		"--api.dashboard=true",
+		"--api.insecure=true",
+		"--providers.docker=true",
+		"--providers.docker.exposedbydefault=false",
+		"--entrypoints.web.address=:80",
+		"--entrypoints.websecure.address=:443",
+	}
+
+	// Add SSL configuration if domain is provided
+	if config.Domain != "" {
+		traefikCommands = append(traefikCommands,
+			"--certificatesresolvers.letsencrypt.acme.email="+config.AdminEmail,
+			"--certificatesresolvers.letsencrypt.acme.storage=/data/acme.json",
+			"--certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web",
+		)
+	}
+
+	// Determine host for routing
+	host := config.PublicIP
+	if config.Domain != "" {
+		host = config.Domain
+	}
+
+	// Build Traefik command section
+	traefikCommandSection := ""
+	for _, cmd := range traefikCommands {
+		traefikCommandSection += fmt.Sprintf("      - %s\n", cmd)
+	}
+
+	// Build labels for API service
+	apiLabels := fmt.Sprintf(`      - "traefik.enable=true"
+      - "traefik.http.routers.api.rule=Host(\"%s\") && PathPrefix(\"/api\")"
+      - "traefik.http.services.api.loadbalancer.server.port=8080"`, host)
+
+	if config.Domain != "" {
+		apiLabels += `
+      - "traefik.http.routers.api.tls.certresolver=letsencrypt"`
+	}
+
+	// Build labels for Dashboard service
+	dashboardLabels := fmt.Sprintf(`      - "traefik.enable=true"
+      - "traefik.http.routers.dashboard.rule=Host(\"%s\")"
+      - "traefik.http.services.dashboard.loadbalancer.server.port=3000"`, host)
+
+	if config.Domain != "" {
+		dashboardLabels += `
+      - "traefik.http.routers.dashboard.tls.certresolver=letsencrypt"`
+	}
+
+	// Build the complete YAML with proper structure
+	var yamlBuilder strings.Builder
+
+	yamlBuilder.WriteString("version: '3.8'\n\n")
+	yamlBuilder.WriteString("services:\n")
+
+	// Traefik service
+	yamlBuilder.WriteString("  # Reverse Proxy & Load Balancer\n")
+	yamlBuilder.WriteString("  traefik:\n")
+	yamlBuilder.WriteString("    image: traefik:v3.0\n")
+	yamlBuilder.WriteString("    container_name: kova-traefik\n")
+	yamlBuilder.WriteString("    restart: unless-stopped\n")
+	yamlBuilder.WriteString("    command:\n")
+	yamlBuilder.WriteString(traefikCommandSection)
+	yamlBuilder.WriteString("    ports:\n")
+	yamlBuilder.WriteString("      - \"80:80\"\n")
+	yamlBuilder.WriteString("      - \"443:443\"\n")
+	yamlBuilder.WriteString("      - \"8080:8080\"\n")
+	yamlBuilder.WriteString("    volumes:\n")
+	yamlBuilder.WriteString("      - /var/run/docker.sock:/var/run/docker.sock:ro\n")
+	yamlBuilder.WriteString(fmt.Sprintf("      - %s/traefik:/data\n", config.DataDir))
+	yamlBuilder.WriteString("    networks:\n")
+	yamlBuilder.WriteString("      - kova_network\n\n")
+
+	// PostgreSQL service
+	yamlBuilder.WriteString("  # PostgreSQL Database\n")
+	yamlBuilder.WriteString("  postgres:\n")
+	yamlBuilder.WriteString("    image: postgres:15-alpine\n")
+	yamlBuilder.WriteString("    container_name: kova-postgres\n")
+	yamlBuilder.WriteString("    restart: unless-stopped\n")
+	yamlBuilder.WriteString("    environment:\n")
+	yamlBuilder.WriteString("      POSTGRES_DB: kova\n")
+	yamlBuilder.WriteString("      POSTGRES_USER: kova\n")
+	yamlBuilder.WriteString(fmt.Sprintf("      POSTGRES_PASSWORD: %s\n", config.PostgresPassword))
+	yamlBuilder.WriteString("      PGDATA: /var/lib/postgresql/data/pgdata\n")
+	yamlBuilder.WriteString("    volumes:\n")
+	yamlBuilder.WriteString(fmt.Sprintf("      - %s/postgres:/var/lib/postgresql/data\n", config.DataDir))
+	yamlBuilder.WriteString("    networks:\n")
+	yamlBuilder.WriteString("      - kova_network\n")
+	yamlBuilder.WriteString("    healthcheck:\n")
+	yamlBuilder.WriteString("      test: [\"CMD-SHELL\", \"pg_isready -U kova -d kova\"]\n")
+	yamlBuilder.WriteString("      interval: 10s\n")
+	yamlBuilder.WriteString("      timeout: 5s\n")
+	yamlBuilder.WriteString("      retries: 5\n\n")
+
+	// Redis service
+	yamlBuilder.WriteString("  # Redis Cache\n")
+	yamlBuilder.WriteString("  redis:\n")
+	yamlBuilder.WriteString("    image: redis:7-alpine\n")
+	yamlBuilder.WriteString("    container_name: kova-redis\n")
+	yamlBuilder.WriteString("    restart: unless-stopped\n")
+	yamlBuilder.WriteString(fmt.Sprintf("    command: redis-server --appendonly yes --requirepass %s\n", config.RedisPassword))
+	yamlBuilder.WriteString("    volumes:\n")
+	yamlBuilder.WriteString(fmt.Sprintf("      - %s/redis:/data\n", config.DataDir))
+	yamlBuilder.WriteString("    networks:\n")
+	yamlBuilder.WriteString("      - kova_network\n")
+	yamlBuilder.WriteString("    healthcheck:\n")
+	yamlBuilder.WriteString("      test: [\"CMD\", \"redis-cli\", \"--raw\", \"incr\", \"ping\"]\n")
+	yamlBuilder.WriteString("      interval: 10s\n")
+	yamlBuilder.WriteString("      timeout: 5s\n")
+	yamlBuilder.WriteString("      retries: 5\n\n")
+
+	// Kova API service
+	yamlBuilder.WriteString("  # Kova Core API\n")
+	yamlBuilder.WriteString("  kova-api:\n")
+	yamlBuilder.WriteString(fmt.Sprintf("    image: %s/%s-api:%s\n", config.RegistryURL, config.Repository, config.Version))
+	yamlBuilder.WriteString("    container_name: kova-api\n")
+	yamlBuilder.WriteString("    restart: unless-stopped\n")
+	yamlBuilder.WriteString("    env_file:\n")
+	yamlBuilder.WriteString("      - .env\n")
+	yamlBuilder.WriteString("    depends_on:\n")
+	yamlBuilder.WriteString("      postgres:\n")
+	yamlBuilder.WriteString("        condition: service_healthy\n")
+	yamlBuilder.WriteString("      redis:\n")
+	yamlBuilder.WriteString("        condition: service_healthy\n")
+	yamlBuilder.WriteString("    networks:\n")
+	yamlBuilder.WriteString("      - kova_network\n")
+	yamlBuilder.WriteString("    labels:\n")
+	yamlBuilder.WriteString(apiLabels)
+	yamlBuilder.WriteString("\n\n")
+
+	// Kova Dashboard service
+	yamlBuilder.WriteString("  # Kova Dashboard\n")
+	yamlBuilder.WriteString("  kova-dashboard:\n")
+	yamlBuilder.WriteString(fmt.Sprintf("    image: %s/%s-dashboard:%s\n", config.RegistryURL, config.Repository, config.Version))
+	yamlBuilder.WriteString("    container_name: kova-dashboard\n")
+	yamlBuilder.WriteString("    restart: unless-stopped\n")
+	yamlBuilder.WriteString("    env_file:\n")
+	yamlBuilder.WriteString("      - .env.dashboard\n")
+	yamlBuilder.WriteString("    depends_on:\n")
+	yamlBuilder.WriteString("      - kova-api\n")
+	yamlBuilder.WriteString("    networks:\n")
+	yamlBuilder.WriteString("      - kova_network\n")
+	yamlBuilder.WriteString("    labels:\n")
+	yamlBuilder.WriteString(dashboardLabels)
+	yamlBuilder.WriteString("\n\n")
+
+	// Networks and volumes
+	yamlBuilder.WriteString("networks:\n")
+	yamlBuilder.WriteString("  kova_network:\n")
+	yamlBuilder.WriteString("    driver: bridge\n\n")
+	yamlBuilder.WriteString("volumes:\n")
+	yamlBuilder.WriteString("  postgres_data:\n")
+	yamlBuilder.WriteString("  redis_data:\n")
+	yamlBuilder.WriteString("  traefik_data:\n")
+
+	return yamlBuilder.String()
+}
+
+func generateLocalBuildCompose(config *InstallConfig) string {
+	// Build Traefik command list
+	traefikCommands := []string{
+		"--api.dashboard=true",
+		"--api.insecure=true",
+		"--providers.docker=true",
+		"--providers.docker.exposedbydefault=false",
+		"--entrypoints.web.address=:80",
+		"--entrypoints.websecure.address=:443",
+	}
+
+	// Add SSL configuration if domain is provided
+	if config.Domain != "" {
+		traefikCommands = append(traefikCommands,
+			"--certificatesresolvers.letsencrypt.acme.email="+config.AdminEmail,
+			"--certificatesresolvers.letsencrypt.acme.storage=/data/acme.json",
+			"--certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web",
+		)
+	}
+
+	// Determine host for routing
+	host := config.PublicIP
+	if config.Domain != "" {
+		host = config.Domain
+	}
+
+	// Build Traefik command section
+	traefikCommandSection := ""
+	for _, cmd := range traefikCommands {
+		traefikCommandSection += fmt.Sprintf("      - %s\n", cmd)
+	}
+
+	// Build labels for API service
+	apiLabels := fmt.Sprintf("      - \"traefik.enable=true\"\n      - \"traefik.http.routers.api.rule=Host(\\\"%s\\\") && PathPrefix(\\\"/api\\\")\"\n      - \"traefik.http.services.api.loadbalancer.server.port=8080\"", host)
+
+	if config.Domain != "" {
+		apiLabels += "\n      - \"traefik.http.routers.api.tls.certresolver=letsencrypt\""
+	}
+
+	// Build labels for Dashboard service
+	dashboardLabels := fmt.Sprintf("      - \"traefik.enable=true\"\n      - \"traefik.http.routers.dashboard.rule=Host(\\\"%s\\\")\"\n      - \"traefik.http.services.dashboard.loadbalancer.server.port=3000\"", host)
+
+	if config.Domain != "" {
+		dashboardLabels += "\n      - \"traefik.http.routers.dashboard.tls.certresolver=letsencrypt\""
+	}
+
+	// Build the complete YAML with proper structure
+	var yamlBuilder strings.Builder
+
+	yamlBuilder.WriteString("version: '3.8'\n\n")
+	yamlBuilder.WriteString("services:\n")
+
+	// Traefik service
+	yamlBuilder.WriteString("  # Reverse Proxy & Load Balancer\n")
+	yamlBuilder.WriteString("  traefik:\n")
+	yamlBuilder.WriteString("    image: traefik:v3.0\n")
+	yamlBuilder.WriteString("    container_name: kova-traefik\n")
+	yamlBuilder.WriteString("    restart: unless-stopped\n")
+	yamlBuilder.WriteString("    command:\n")
+	yamlBuilder.WriteString(traefikCommandSection)
+	yamlBuilder.WriteString("    ports:\n")
+	yamlBuilder.WriteString("      - \"80:80\"\n")
+	yamlBuilder.WriteString("      - \"443:443\"\n")
+	yamlBuilder.WriteString("      - \"8080:8080\"\n")
+	yamlBuilder.WriteString("    volumes:\n")
+	yamlBuilder.WriteString("      - /var/run/docker.sock:/var/run/docker.sock:ro\n")
+	yamlBuilder.WriteString(fmt.Sprintf("      - %s/traefik:/data\n", config.DataDir))
+	yamlBuilder.WriteString("    networks:\n")
+	yamlBuilder.WriteString("      - kova_network\n\n")
+
+	// PostgreSQL service
+	yamlBuilder.WriteString("  # PostgreSQL Database\n")
+	yamlBuilder.WriteString("  postgres:\n")
+	yamlBuilder.WriteString("    image: postgres:15-alpine\n")
+	yamlBuilder.WriteString("    container_name: kova-postgres\n")
+	yamlBuilder.WriteString("    restart: unless-stopped\n")
+	yamlBuilder.WriteString("    environment:\n")
+	yamlBuilder.WriteString("      POSTGRES_DB: kova\n")
+	yamlBuilder.WriteString("      POSTGRES_USER: kova\n")
+	yamlBuilder.WriteString(fmt.Sprintf("      POSTGRES_PASSWORD: %s\n", config.PostgresPassword))
+	yamlBuilder.WriteString("      PGDATA: /var/lib/postgresql/data/pgdata\n")
+	yamlBuilder.WriteString("    volumes:\n")
+	yamlBuilder.WriteString(fmt.Sprintf("      - %s/postgres:/var/lib/postgresql/data\n", config.DataDir))
+	yamlBuilder.WriteString("    networks:\n")
+	yamlBuilder.WriteString("      - kova_network\n")
+	yamlBuilder.WriteString("    healthcheck:\n")
+	yamlBuilder.WriteString("      test: [\"CMD-SHELL\", \"pg_isready -U kova -d kova\"]\n")
+	yamlBuilder.WriteString("      interval: 10s\n")
+	yamlBuilder.WriteString("      timeout: 5s\n")
+	yamlBuilder.WriteString("      retries: 5\n\n")
+
+	// Redis service
+	yamlBuilder.WriteString("  # Redis Cache\n")
+	yamlBuilder.WriteString("  redis:\n")
+	yamlBuilder.WriteString("    image: redis:7-alpine\n")
+	yamlBuilder.WriteString("    container_name: kova-redis\n")
+	yamlBuilder.WriteString("    restart: unless-stopped\n")
+	yamlBuilder.WriteString(fmt.Sprintf("    command: redis-server --appendonly yes --requirepass %s\n", config.RedisPassword))
+	yamlBuilder.WriteString("    volumes:\n")
+	yamlBuilder.WriteString(fmt.Sprintf("      - %s/redis:/data\n", config.DataDir))
+	yamlBuilder.WriteString("    networks:\n")
+	yamlBuilder.WriteString("      - kova_network\n")
+	yamlBuilder.WriteString("    healthcheck:\n")
+	yamlBuilder.WriteString("      test: [\"CMD\", \"redis-cli\", \"--raw\", \"incr\", \"ping\"]\n")
+	yamlBuilder.WriteString("      interval: 10s\n")
+	yamlBuilder.WriteString("      timeout: 5s\n")
+	yamlBuilder.WriteString("      retries: 5\n\n")
+
+	// Kova API service
+	yamlBuilder.WriteString("  # Kova Core API\n")
+	yamlBuilder.WriteString("  kova-api:\n")
+	yamlBuilder.WriteString("    build:\n")
+	yamlBuilder.WriteString("      context: .\n")
+	yamlBuilder.WriteString("      dockerfile: apps/core/Dockerfile\n")
+	yamlBuilder.WriteString("    container_name: kova-api\n")
+	yamlBuilder.WriteString("    restart: unless-stopped\n")
+	yamlBuilder.WriteString("    env_file:\n")
+	yamlBuilder.WriteString("      - .env\n")
+	yamlBuilder.WriteString("    depends_on:\n")
+	yamlBuilder.WriteString("      postgres:\n")
+	yamlBuilder.WriteString("        condition: service_healthy\n")
+	yamlBuilder.WriteString("      redis:\n")
+	yamlBuilder.WriteString("        condition: service_healthy\n")
+	yamlBuilder.WriteString("    networks:\n")
+	yamlBuilder.WriteString("      - kova_network\n")
+	yamlBuilder.WriteString("    labels:\n")
+	yamlBuilder.WriteString(apiLabels)
+	yamlBuilder.WriteString("\n\n")
+
+	// Kova Dashboard service
+	yamlBuilder.WriteString("  # Kova Dashboard\n")
+	yamlBuilder.WriteString("  kova-dashboard:\n")
+	yamlBuilder.WriteString("    build:\n")
+	yamlBuilder.WriteString("      context: .\n")
+	yamlBuilder.WriteString("      dockerfile: apps/web/Dockerfile\n")
+	yamlBuilder.WriteString("    container_name: kova-dashboard\n")
+	yamlBuilder.WriteString("    restart: unless-stopped\n")
+	yamlBuilder.WriteString("    env_file:\n")
+	yamlBuilder.WriteString("      - .env.dashboard\n")
+	yamlBuilder.WriteString("    depends_on:\n")
+	yamlBuilder.WriteString("      - kova-api\n")
+	yamlBuilder.WriteString("    networks:\n")
+	yamlBuilder.WriteString("      - kova_network\n")
+	yamlBuilder.WriteString("    labels:\n")
+	yamlBuilder.WriteString(dashboardLabels)
+	yamlBuilder.WriteString("\n\n")
+
+	// Networks and volumes
+	yamlBuilder.WriteString("networks:\n")
+	yamlBuilder.WriteString("  kova_network:\n")
+	yamlBuilder.WriteString("    driver: bridge\n\n")
+	yamlBuilder.WriteString("volumes:\n")
+	yamlBuilder.WriteString("  postgres_data:\n")
+	yamlBuilder.WriteString("  redis_data:\n")
+	yamlBuilder.WriteString("  traefik_data:\n")
+
+	return yamlBuilder.String()
 }
 
 func buildImages(config *InstallConfig) error {
@@ -662,18 +822,146 @@ func getLocalIP() (string, error) {
 }
 
 func getPublicIP() (string, error) {
-	resp, err := http.Get("https://ifconfig.me")
+	// Use the /ip endpoint to get just the IP address, not the HTML page
+	resp, err := http.Get("https://ifconfig.me/ip")
 	if err != nil {
-		return "", err
+		// Fallback to alternative services
+		return getPublicIPFallback()
 	}
 	defer resp.Body.Close()
 
-	ip, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", err
+	if resp.StatusCode != 200 {
+		return getPublicIPFallback()
 	}
 
-	return strings.TrimSpace(string(ip)), nil
+	ip, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return getPublicIPFallback()
+	}
+
+	ipStr := strings.TrimSpace(string(ip))
+
+	// Validate that we got an IP address, not HTML
+	if strings.Contains(ipStr, "<") || strings.Contains(ipStr, "html") {
+		return getPublicIPFallback()
+	}
+
+	// Basic IP validation
+	if isValidIP(ipStr) {
+		return ipStr, nil
+	}
+
+	return getPublicIPFallback()
+}
+
+func getPublicIPFallback() (string, error) {
+	// Try multiple fallback services
+	services := []string{
+		"https://api.ipify.org",
+		"https://checkip.amazonaws.com",
+		"https://ipecho.net/plain",
+		"https://icanhazip.com",
+	}
+
+	for _, service := range services {
+		resp, err := http.Get(service)
+		if err != nil {
+			continue
+		}
+
+		if resp.StatusCode != 200 {
+			resp.Body.Close()
+			continue
+		}
+
+		ip, err := io.ReadAll(resp.Body)
+		resp.Body.Close()
+
+		if err != nil {
+			continue
+		}
+
+		ipStr := strings.TrimSpace(string(ip))
+
+		// Validate that we got an IP address, not HTML or error message
+		if isValidIP(ipStr) {
+			return ipStr, nil
+		}
+	}
+
+	return "", fmt.Errorf("failed to get public IP from all services")
+}
+
+func isValidIP(ip string) bool {
+	// Basic IP validation - check if it looks like an IPv4 address
+	parts := strings.Split(ip, ".")
+	if len(parts) != 4 {
+		return false
+	}
+
+	for _, part := range parts {
+		if len(part) == 0 || len(part) > 3 {
+			return false
+		}
+
+		// Check if all characters are digits
+		for _, char := range part {
+			if char < '0' || char > '9' {
+				return false
+			}
+		}
+	}
+
+	return true
+}
+
+func detectNetwork(config *InstallConfig) error {
+	// Get local IP
+	localIP, err := getLocalIP()
+	if err != nil {
+		fmt.Printf("   Warning: Could not detect local IP: %v\n", err)
+		config.LocalIP = "localhost"
+	} else {
+		config.LocalIP = localIP
+	}
+
+	// Get public IP
+	publicIP, err := getPublicIP()
+	if err != nil {
+		fmt.Printf("   Warning: Could not detect public IP: %v\n", err)
+		// Fall back to local IP if we can't get public IP
+		config.PublicIP = config.LocalIP
+	} else {
+		config.PublicIP = publicIP
+		fmt.Printf("   Detected public IP: %s\n", publicIP)
+	}
+
+	// Set API URL based on domain or IP
+	if config.Domain != "" {
+		config.PublicAPIURL = fmt.Sprintf("https://%s/api", config.Domain)
+	} else {
+		config.PublicAPIURL = fmt.Sprintf("http://%s/api", config.PublicIP)
+	}
+
+	fmt.Printf("   Local IP: %s, Public IP: %s\n", config.LocalIP, config.PublicIP)
+	fmt.Printf("   API URL: %s\n", config.PublicAPIURL)
+
+	return nil
+}
+
+// Test function to verify getPublicIP is working correctly
+func testGetPublicIP() {
+	fmt.Println("Testing getPublicIP function...")
+	ip, err := getPublicIP()
+	if err != nil {
+		fmt.Printf("Error: %v\n", err)
+		return
+	}
+
+	fmt.Printf("Public IP: '%s'\n", ip)
+	fmt.Printf("Length: %d characters\n", len(ip))
+	fmt.Printf("Contains HTML: %v\n", strings.Contains(ip, "<"))
+	fmt.Printf("Valid IP format: %v\n", isValidIP(ip))
 }
 
 func getDashboardURL(config *InstallConfig) string {
@@ -741,4 +1029,3 @@ func printAccessInfo(config *InstallConfig) {
 
 	fmt.Println(strings.Repeat("=", 60))
 }
-

@@ -1,27 +1,21 @@
 FROM node:22-alpine AS base
 RUN apk add --no-cache libc6-compat wget
+WORKDIR /app
 
 # Install dependencies
 FROM base AS deps
-WORKDIR /app
-
-# Copy ALL package files (let npm figure out the workspace structure)
 COPY package*.json ./
-COPY apps/ ./apps/
-COPY packages/ ./packages/
 COPY turbo.json* ./
-
-# Install everything
+COPY apps/web/package*.json ./apps/web/
+COPY packages/ ./packages/
 RUN npm install
 
 # Build stage
 FROM base AS builder
 WORKDIR /app
+COPY --from=deps /app/node_modules ./node_modules
+COPY . .
 
-# Copy everything from deps
-COPY --from=deps /app/ ./
-
-# Build (let npm handle workspace dependencies)
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
@@ -34,20 +28,26 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
-
-RUN addgroup --system --gid 1001 nodejs
-RUN adduser --system --uid 1001 nextjs
-
-# Copy Next.js output
-COPY --from=builder /app/apps/web/public ./public
-COPY --from=builder --chown=nextjs:nodejs /app/apps/web/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /app/apps/web/.next/static ./.next/static
-
-USER nextjs
-
-EXPOSE 3000
 ENV PORT=3000
 
-HEALTHCHECK CMD wget --no-verbose --tries=1 --spider http://localhost:3000/api/health || exit 1
+# Create user
+RUN addgroup --system --gid 1001 nodejs && \
+    adduser --system --uid 1001 nextjs
 
-CMD ["node", "server.js"]
+# Copy the standalone build (which includes the full apps/web structure)
+COPY --from=builder /app/apps/web/.next/standalone ./
+
+# Copy static files to match the structure
+COPY --from=builder --chown=nextjs:nodejs /app/apps/web/.next/static ./apps/web/.next/static
+
+# Set ownership
+RUN chown -R nextjs:nodejs /app
+
+USER nextjs
+EXPOSE 3000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+  CMD wget --no-verbose --tries=1 --spider http://localhost:3000/ || exit 1
+
+CMD ["node", "apps/web/server.js"]
