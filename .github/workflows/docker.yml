@@ -112,11 +112,6 @@ jobs:
     strategy:
       matrix:
         image: [api, dashboard]
-        include:
-          - image: api
-            full_image: ${{ env.REGISTRY }}/${{ github.repository }}-api:latest
-          - image: dashboard  
-            full_image: ${{ env.REGISTRY }}/${{ github.repository }}-dashboard:latest
     
     steps:
     - name: Log in to Container Registry
@@ -126,10 +121,15 @@ jobs:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
     
+    - name: Set image name
+      id: set-image
+      run: |
+        echo "full_image=${{ env.REGISTRY }}/${{ github.repository }}-${{ matrix.image }}:latest" >> $GITHUB_OUTPUT
+    
     - name: Run Trivy vulnerability scanner
       uses: aquasecurity/trivy-action@master
       with:
-        image-ref: ${{ matrix.full_image }}
+        image-ref: ${{ steps.set-image.outputs.full_image }}
         format: 'sarif'
         output: 'trivy-results.sarif'
     
