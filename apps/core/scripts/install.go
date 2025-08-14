@@ -64,6 +64,7 @@ func Install(config *InstallConfig) error {
 		{"Detecting network configuration", detectNetwork},
 		{"Creating environment files", createEnvironmentFiles},
 		{"Generating docker-compose.yml", generateDockerCompose},
+		{"Creating nginx-proxy.conf", createNginxProxyConfig},
 		{"Starting services", startServices},
 		{"Running database migrations", runMigrations},
 		{"Creating admin user", createAdminUser},
@@ -322,24 +323,26 @@ func generatePrebuiltCompose(config *InstallConfig) string {
 		traefikCommandSection += fmt.Sprintf("      - %s\n", cmd)
 	}
 
-	// Build labels for API service
+	// Build labels for API service (using subdomain routing)
 	apiLabels := fmt.Sprintf(`      - "traefik.enable=true"
-      - "traefik.http.routers.api.rule=Host(\"%s\") && PathPrefix(\"/api\")"
-      - "traefik.http.services.api.loadbalancer.server.port=8080"`, host)
+      - "traefik.http.routers.kova-api.rule=Host(\\"api.%s\\") || Host(\\"api.localhost\\") || Host(\\"api.127.0.0.1\\")"
+      - "traefik.http.routers.kova-api.priority=100"
+      - "traefik.http.services.kova-api.loadbalancer.server.port=8080"`, host)
 
 	if config.Domain != "" {
 		apiLabels += `
-      - "traefik.http.routers.api.tls.certresolver=letsencrypt"`
+      - "traefik.http.routers.kova-api.tls.certresolver=letsencrypt"`
 	}
 
 	// Build labels for Dashboard service
 	dashboardLabels := fmt.Sprintf(`      - "traefik.enable=true"
-      - "traefik.http.routers.dashboard.rule=Host(\"%s\")"
-      - "traefik.http.services.dashboard.loadbalancer.server.port=3000"`, host)
+      - "traefik.http.routers.kova-dashboard.rule=Host(\\"%s\\") || Host(\\"localhost\\") || Host(\\"127.0.0.1\\")"
+      - "traefik.http.routers.kova-dashboard.priority=50"
+      - "traefik.http.services.kova-dashboard.loadbalancer.server.port=3000"`, host)
 
 	if config.Domain != "" {
 		dashboardLabels += `
-      - "traefik.http.routers.dashboard.tls.certresolver=letsencrypt"`
+      - "traefik.http.routers.kova-dashboard.tls.certresolver=letsencrypt"`
 	}
 
 	// Build the complete YAML with proper structure
@@ -365,6 +368,19 @@ func generatePrebuiltCompose(config *InstallConfig) string {
 	yamlBuilder.WriteString(fmt.Sprintf("      - %s/traefik:/data\n", config.DataDir))
 	yamlBuilder.WriteString("    networks:\n")
 	yamlBuilder.WriteString("      - kova_network\n\n")
+
+	// API Proxy service
+	yamlBuilder.WriteString("  # API Proxy for Dashboard\n")
+	yamlBuilder.WriteString("  api-proxy:\n")
+	yamlBuilder.WriteString("    image: nginx:alpine\n")
+	yamlBuilder.WriteString("    container_name: kova-api-proxy\n")
+	yamlBuilder.WriteString("    restart: unless-stopped\n")
+	yamlBuilder.WriteString("    networks:\n")
+	yamlBuilder.WriteString("      - kova_network\n")
+	yamlBuilder.WriteString("    volumes:\n")
+	yamlBuilder.WriteString("      - ./nginx-proxy.conf:/etc/nginx/nginx.conf:ro\n")
+	yamlBuilder.WriteString("    depends_on:\n")
+	yamlBuilder.WriteString("      - kova-api\n\n")
 
 	// PostgreSQL service
 	yamlBuilder.WriteString("  # PostgreSQL Database\n")
@@ -433,8 +449,13 @@ func generatePrebuiltCompose(config *InstallConfig) string {
 	yamlBuilder.WriteString("      - .env.dashboard\n")
 	yamlBuilder.WriteString("    depends_on:\n")
 	yamlBuilder.WriteString("      - kova-api\n")
+	yamlBuilder.WriteString("      - api-proxy\n")
 	yamlBuilder.WriteString("    networks:\n")
 	yamlBuilder.WriteString("      - kova_network\n")
+	yamlBuilder.WriteString("    extra_hosts:\n")
+	yamlBuilder.WriteString(fmt.Sprintf("      - \"api.%s:host-gateway\"\n", host))
+	yamlBuilder.WriteString("    healthcheck:\n")
+	yamlBuilder.WriteString("      disable: true\n")
 	yamlBuilder.WriteString("    labels:\n")
 	yamlBuilder.WriteString(dashboardLabels)
 	yamlBuilder.WriteString("\n\n")
@@ -449,6 +470,38 @@ func generatePrebuiltCompose(config *InstallConfig) string {
 	yamlBuilder.WriteString("  traefik_data:\n")
 
 	return yamlBuilder.String()
+}
+
+func createNginxProxyConfig(config *InstallConfig) error {
+	nginxConfig := `events {
+    worker_connections 1024;
+}
+
+http {
+    upstream api {
+        server kova-api:8080;
+    }
+
+    server {
+        listen 80;
+        server_name _;
+
+        location /api/ {
+            proxy_pass http://api/api/;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+        }
+    }
+}`
+
+	nginxConfigFile := filepath.Join(config.InstallDir, "nginx-proxy.conf")
+	if err := os.WriteFile(nginxConfigFile, []byte(nginxConfig), 0644); err != nil {
+		return fmt.Errorf("failed to create nginx-proxy.conf: %w", err)
+	}
+
+	return nil
 }
 
 func generateLocalBuildCompose(config *InstallConfig) string {

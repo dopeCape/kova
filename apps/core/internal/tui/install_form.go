@@ -503,4 +503,3 @@ func (m *InstallFormModel) renderComplete() string {
 
 	return s.String()
 }
-
