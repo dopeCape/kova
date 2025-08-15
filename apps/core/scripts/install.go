@@ -229,11 +229,10 @@ ADMIN_PASSWORD=%s
 AUTH_SECRET=%s
 NEXTAUTH_SECRET=%s
 NEXT_PUBLIC_API_URL=%s
-NEXTAUTH_URL=%s
 API_URL=http://api-proxy
 AUTH_TRUST_HOST=true
 `, config.AuthSecret, config.AuthSecret, config.PublicAPIURL,
-		getDashboardURL(config))
+	)
 
 	dashboardEnvFile := filepath.Join(config.InstallDir, ".env.dashboard")
 	if err := os.WriteFile(dashboardEnvFile, []byte(dashboardEnv), 0600); err != nil {
