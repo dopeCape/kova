@@ -230,6 +230,8 @@ AUTH_SECRET=%s
 NEXTAUTH_SECRET=%s
 NEXT_PUBLIC_API_URL=%s
 NEXTAUTH_URL=%s
+API_URL=http://api-proxy
+AUTH_TRUST_HOST=true
 `, config.AuthSecret, config.AuthSecret, config.PublicAPIURL,
 		getDashboardURL(config))
 
@@ -292,8 +294,14 @@ func validateDockerCompose(composeFile string) error {
 }
 
 func generatePrebuiltCompose(config *InstallConfig) string {
-	// Build Traefik command list
-	traefikCommands := []string{
+	// Determine host for routing
+	host := config.PublicIP
+	if config.Domain != "" {
+		host = config.Domain
+	}
+
+	// Build traefik command args
+	traefikArgs := []string{
 		"--api.dashboard=true",
 		"--api.insecure=true",
 		"--providers.docker=true",
@@ -302,174 +310,156 @@ func generatePrebuiltCompose(config *InstallConfig) string {
 		"--entrypoints.websecure.address=:443",
 	}
 
-	// Add SSL configuration if domain is provided
 	if config.Domain != "" {
-		traefikCommands = append(traefikCommands,
+		traefikArgs = append(traefikArgs,
 			"--certificatesresolvers.letsencrypt.acme.email="+config.AdminEmail,
 			"--certificatesresolvers.letsencrypt.acme.storage=/data/acme.json",
 			"--certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web",
 		)
 	}
 
-	// Determine host for routing
-	host := config.PublicIP
-	if config.Domain != "" {
-		host = config.Domain
+	compose := fmt.Sprintf(`version: '3.8'
+
+services:
+  # Reverse Proxy & Load Balancer
+  traefik:
+    image: traefik:v3.0
+    container_name: kova-traefik
+    restart: unless-stopped
+    command:`)
+
+	for _, arg := range traefikArgs {
+		compose += fmt.Sprintf("\n      - %s", arg)
 	}
 
-	// Build Traefik command section
-	traefikCommandSection := ""
-	for _, cmd := range traefikCommands {
-		traefikCommandSection += fmt.Sprintf("      - %s\n", cmd)
-	}
+	compose += fmt.Sprintf(`
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8080:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - %s/traefik:/data
+    networks:
+      - kova_network
 
-	// Build labels for API service (using subdomain routing)
-	apiLabels := fmt.Sprintf(`      - "traefik.enable=true"
-      - "traefik.http.routers.kova-api.rule=Host(\\"api.%s\\") || Host(\\"api.localhost\\") || Host(\\"api.127.0.0.1\\")"
+  # API Proxy for Dashboard
+  api-proxy:
+    image: nginx:alpine
+    container_name: kova-api-proxy
+    restart: unless-stopped
+    networks:
+      - kova_network
+    volumes:
+      - ./nginx-proxy.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - kova-api
+
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: kova-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: kova
+      POSTGRES_USER: kova
+      POSTGRES_PASSWORD: %s
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - %s/postgres:/var/lib/postgresql/data
+    networks:
+      - kova_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kova -d kova"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: kova-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --requirepass %s
+    volumes:
+      - %s/redis:/data
+    networks:
+      - kova_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Kova Core API
+  kova-api:
+    image: %s/%s-api:%s
+    container_name: kova-api
+    restart: unless-stopped
+    env_file:
+      - .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - kova_network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.kova-api.rule=Host(`+"`"+`api.%s`+"`"+`) || Host(`+"`"+`api.localhost`+"`"+`) || Host(`+"`"+`api.127.0.0.1`+"`"+`)"
       - "traefik.http.routers.kova-api.priority=100"
-      - "traefik.http.services.kova-api.loadbalancer.server.port=8080"`, host)
+      - "traefik.http.services.kova-api.loadbalancer.server.port=8080"`,
+		config.DataDir, config.PostgresPassword, config.DataDir, config.RedisPassword, config.DataDir,
+		config.RegistryURL, config.Repository, config.Version, host)
 
 	if config.Domain != "" {
-		apiLabels += `
+		compose += `
       - "traefik.http.routers.kova-api.tls.certresolver=letsencrypt"`
 	}
 
-	// Build labels for Dashboard service
-	dashboardLabels := fmt.Sprintf(`      - "traefik.enable=true"
-      - "traefik.http.routers.kova-dashboard.rule=Host(\\"%s\\") || Host(\\"localhost\\") || Host(\\"127.0.0.1\\")"
+	compose += fmt.Sprintf(`
+
+  # Kova Dashboard
+  kova-dashboard:
+    image: %s/%s-dashboard:%s
+    container_name: kova-dashboard
+    restart: unless-stopped
+    env_file:
+      - .env.dashboard
+    depends_on:
+      - kova-api
+      - api-proxy
+    networks:
+      - kova_network
+    extra_hosts:
+      - "api.%s:host-gateway"
+    healthcheck:
+      disable: true
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.kova-dashboard.rule=Host(`+"`"+`%s`+"`"+`) || Host(`+"`"+`localhost`+"`"+`) || Host(`+"`"+`127.0.0.1`+"`"+`)"
       - "traefik.http.routers.kova-dashboard.priority=50"
-      - "traefik.http.services.kova-dashboard.loadbalancer.server.port=3000"`, host)
+      - "traefik.http.services.kova-dashboard.loadbalancer.server.port=3000"`,
+		config.RegistryURL, config.Repository, config.Version, host, host)
 
 	if config.Domain != "" {
-		dashboardLabels += `
+		compose += `
       - "traefik.http.routers.kova-dashboard.tls.certresolver=letsencrypt"`
 	}
 
-	// Build the complete YAML with proper structure
-	var yamlBuilder strings.Builder
+	compose += `
 
-	yamlBuilder.WriteString("version: '3.8'\n\n")
-	yamlBuilder.WriteString("services:\n")
+networks:
+  kova_network:
+    driver: bridge
 
-	// Traefik service
-	yamlBuilder.WriteString("  # Reverse Proxy & Load Balancer\n")
-	yamlBuilder.WriteString("  traefik:\n")
-	yamlBuilder.WriteString("    image: traefik:v3.0\n")
-	yamlBuilder.WriteString("    container_name: kova-traefik\n")
-	yamlBuilder.WriteString("    restart: unless-stopped\n")
-	yamlBuilder.WriteString("    command:\n")
-	yamlBuilder.WriteString(traefikCommandSection)
-	yamlBuilder.WriteString("    ports:\n")
-	yamlBuilder.WriteString("      - \"80:80\"\n")
-	yamlBuilder.WriteString("      - \"443:443\"\n")
-	yamlBuilder.WriteString("      - \"8080:8080\"\n")
-	yamlBuilder.WriteString("    volumes:\n")
-	yamlBuilder.WriteString("      - /var/run/docker.sock:/var/run/docker.sock:ro\n")
-	yamlBuilder.WriteString(fmt.Sprintf("      - %s/traefik:/data\n", config.DataDir))
-	yamlBuilder.WriteString("    networks:\n")
-	yamlBuilder.WriteString("      - kova_network\n\n")
+volumes:
+  postgres_data:
+  redis_data:
+  traefik_data:`
 
-	// API Proxy service
-	yamlBuilder.WriteString("  # API Proxy for Dashboard\n")
-	yamlBuilder.WriteString("  api-proxy:\n")
-	yamlBuilder.WriteString("    image: nginx:alpine\n")
-	yamlBuilder.WriteString("    container_name: kova-api-proxy\n")
-	yamlBuilder.WriteString("    restart: unless-stopped\n")
-	yamlBuilder.WriteString("    networks:\n")
-	yamlBuilder.WriteString("      - kova_network\n")
-	yamlBuilder.WriteString("    volumes:\n")
-	yamlBuilder.WriteString("      - ./nginx-proxy.conf:/etc/nginx/nginx.conf:ro\n")
-	yamlBuilder.WriteString("    depends_on:\n")
-	yamlBuilder.WriteString("      - kova-api\n\n")
-
-	// PostgreSQL service
-	yamlBuilder.WriteString("  # PostgreSQL Database\n")
-	yamlBuilder.WriteString("  postgres:\n")
-	yamlBuilder.WriteString("    image: postgres:15-alpine\n")
-	yamlBuilder.WriteString("    container_name: kova-postgres\n")
-	yamlBuilder.WriteString("    restart: unless-stopped\n")
-	yamlBuilder.WriteString("    environment:\n")
-	yamlBuilder.WriteString("      POSTGRES_DB: kova\n")
-	yamlBuilder.WriteString("      POSTGRES_USER: kova\n")
-	yamlBuilder.WriteString(fmt.Sprintf("      POSTGRES_PASSWORD: %s\n", config.PostgresPassword))
-	yamlBuilder.WriteString("      PGDATA: /var/lib/postgresql/data/pgdata\n")
-	yamlBuilder.WriteString("    volumes:\n")
-	yamlBuilder.WriteString(fmt.Sprintf("      - %s/postgres:/var/lib/postgresql/data\n", config.DataDir))
-	yamlBuilder.WriteString("    networks:\n")
-	yamlBuilder.WriteString("      - kova_network\n")
-	yamlBuilder.WriteString("    healthcheck:\n")
-	yamlBuilder.WriteString("      test: [\"CMD-SHELL\", \"pg_isready -U kova -d kova\"]\n")
-	yamlBuilder.WriteString("      interval: 10s\n")
-	yamlBuilder.WriteString("      timeout: 5s\n")
-	yamlBuilder.WriteString("      retries: 5\n\n")
-
-	// Redis service
-	yamlBuilder.WriteString("  # Redis Cache\n")
-	yamlBuilder.WriteString("  redis:\n")
-	yamlBuilder.WriteString("    image: redis:7-alpine\n")
-	yamlBuilder.WriteString("    container_name: kova-redis\n")
-	yamlBuilder.WriteString("    restart: unless-stopped\n")
-	yamlBuilder.WriteString(fmt.Sprintf("    command: redis-server --appendonly yes --requirepass %s\n", config.RedisPassword))
-	yamlBuilder.WriteString("    volumes:\n")
-	yamlBuilder.WriteString(fmt.Sprintf("      - %s/redis:/data\n", config.DataDir))
-	yamlBuilder.WriteString("    networks:\n")
-	yamlBuilder.WriteString("      - kova_network\n")
-	yamlBuilder.WriteString("    healthcheck:\n")
-	yamlBuilder.WriteString("      test: [\"CMD\", \"redis-cli\", \"--raw\", \"incr\", \"ping\"]\n")
-	yamlBuilder.WriteString("      interval: 10s\n")
-	yamlBuilder.WriteString("      timeout: 5s\n")
-	yamlBuilder.WriteString("      retries: 5\n\n")
-
-	// Kova API service
-	yamlBuilder.WriteString("  # Kova Core API\n")
-	yamlBuilder.WriteString("  kova-api:\n")
-	yamlBuilder.WriteString(fmt.Sprintf("    image: %s/%s-api:%s\n", config.RegistryURL, config.Repository, config.Version))
-	yamlBuilder.WriteString("    container_name: kova-api\n")
-	yamlBuilder.WriteString("    restart: unless-stopped\n")
-	yamlBuilder.WriteString("    env_file:\n")
-	yamlBuilder.WriteString("      - .env\n")
-	yamlBuilder.WriteString("    depends_on:\n")
-	yamlBuilder.WriteString("      postgres:\n")
-	yamlBuilder.WriteString("        condition: service_healthy\n")
-	yamlBuilder.WriteString("      redis:\n")
-	yamlBuilder.WriteString("        condition: service_healthy\n")
-	yamlBuilder.WriteString("    networks:\n")
-	yamlBuilder.WriteString("      - kova_network\n")
-	yamlBuilder.WriteString("    labels:\n")
-	yamlBuilder.WriteString(apiLabels)
-	yamlBuilder.WriteString("\n\n")
-
-	// Kova Dashboard service
-	yamlBuilder.WriteString("  # Kova Dashboard\n")
-	yamlBuilder.WriteString("  kova-dashboard:\n")
-	yamlBuilder.WriteString(fmt.Sprintf("    image: %s/%s-dashboard:%s\n", config.RegistryURL, config.Repository, config.Version))
-	yamlBuilder.WriteString("    container_name: kova-dashboard\n")
-	yamlBuilder.WriteString("    restart: unless-stopped\n")
-	yamlBuilder.WriteString("    env_file:\n")
-	yamlBuilder.WriteString("      - .env.dashboard\n")
-	yamlBuilder.WriteString("    depends_on:\n")
-	yamlBuilder.WriteString("      - kova-api\n")
-	yamlBuilder.WriteString("      - api-proxy\n")
-	yamlBuilder.WriteString("    networks:\n")
-	yamlBuilder.WriteString("      - kova_network\n")
-	yamlBuilder.WriteString("    extra_hosts:\n")
-	yamlBuilder.WriteString(fmt.Sprintf("      - \"api.%s:host-gateway\"\n", host))
-	yamlBuilder.WriteString("    healthcheck:\n")
-	yamlBuilder.WriteString("      disable: true\n")
-	yamlBuilder.WriteString("    labels:\n")
-	yamlBuilder.WriteString(dashboardLabels)
-	yamlBuilder.WriteString("\n\n")
-
-	// Networks and volumes
-	yamlBuilder.WriteString("networks:\n")
-	yamlBuilder.WriteString("  kova_network:\n")
-	yamlBuilder.WriteString("    driver: bridge\n\n")
-	yamlBuilder.WriteString("volumes:\n")
-	yamlBuilder.WriteString("  postgres_data:\n")
-	yamlBuilder.WriteString("  redis_data:\n")
-	yamlBuilder.WriteString("  traefik_data:\n")
-
-	return yamlBuilder.String()
+	return compose
 }
 
 func createNginxProxyConfig(config *InstallConfig) error {
@@ -696,21 +686,13 @@ func startServices(config *InstallConfig) error {
 	return nil
 }
 
-func runMigrations(config *InstallConfig) error {
-	fmt.Println("   Running database migrations...")
-
-	// Run migrations inside the API container
-	cmd := exec.Command("docker", "exec", "kova-api", "migrate", "-path", "./internal/store/migrations", "-database", config.DatabaseURL, "up")
-	if err := cmd.Run(); err != nil {
-		fmt.Printf("   Warning: Migration failed: %v\n", err)
-		// Don't fail installation if migrations fail (might already be applied)
-	}
-
-	return nil
-}
-
 func createAdminUser(config *InstallConfig) error {
 	fmt.Println("   Creating admin user...")
+
+	// Wait for database to actually accept connections
+	if err := waitForDatabaseReady(config); err != nil {
+		return fmt.Errorf("database not ready: %w", err)
+	}
 
 	// Hash the password
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(config.AdminPassword), bcrypt.DefaultCost)
@@ -718,17 +700,61 @@ func createAdminUser(config *InstallConfig) error {
 		return fmt.Errorf("failed to hash password: %w", err)
 	}
 
-	// Insert admin user (this would typically be done via API call or direct DB insert)
-	query := fmt.Sprintf(`INSERT INTO users (email, username, password_hash, is_admin, created_at, updated_at) 
-		VALUES ('%s', '%s', '%s', true, NOW(), NOW()) 
+	// Use the same columns as the sqlc-generated query
+	query := fmt.Sprintf(`INSERT INTO users (username, email, password_hash) 
+		VALUES ('%s', '%s', $$%s$$) 
 		ON CONFLICT (email) DO NOTHING`,
-		config.AdminEmail, config.AdminUsername, string(hashedPassword))
+		config.AdminUsername, config.AdminEmail, string(hashedPassword))
 
 	cmd := exec.Command("docker", "exec", "kova-postgres", "psql", "-U", "kova", "-d", "kova", "-c", query)
-	if err := cmd.Run(); err != nil {
-		fmt.Printf("   Warning: Could not create admin user: %v\n", err)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to create admin user: %w\nOutput: %s", err, string(output))
 	}
 
+	return nil
+}
+
+func waitForDatabaseReady(config *InstallConfig) error {
+	fmt.Println("   Waiting for database to be ready...")
+
+	for i := 0; i < 30; i++ {
+		// Test actual database connection, not just container health
+		cmd := exec.Command("docker", "exec", "kova-postgres", "psql", "-U", "kova", "-d", "kova", "-c", "SELECT 1;")
+		if err := cmd.Run(); err == nil {
+			fmt.Println("   Database is ready!")
+			return nil
+		}
+
+		fmt.Printf("   Database not ready, waiting... (%d/30)\n", i+1)
+		time.Sleep(2 * time.Second)
+	}
+
+	return fmt.Errorf("database not ready after 60 seconds")
+}
+
+func runMigrations(config *InstallConfig) error {
+	fmt.Println("   Running database migrations...")
+
+	// Wait for database first
+	if err := waitForDatabaseReady(config); err != nil {
+		return err
+	}
+
+	// Run migrations and actually check if they succeed
+	cmd := exec.Command("docker", "exec", "kova-api", "migrate", "-path", "./internal/store/migrations", "-database", config.DatabaseURL, "up")
+	output, err := cmd.CombinedOutput()
+
+	if err != nil {
+		// Check if it's just "no change" which is OK
+		if strings.Contains(string(output), "no change") {
+			fmt.Println("   Migrations already applied")
+			return nil
+		}
+		return fmt.Errorf("migration failed: %w\nOutput: %s", err, string(output))
+	}
+
+	fmt.Println("   Migrations completed successfully")
 	return nil
 }
 
