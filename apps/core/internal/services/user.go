@@ -50,6 +50,7 @@ func (s *UserService) CreateUser(ctx context.Context, req *models.CreateUserRequ
 	}
 
 	// Hash password
+	//TODO: move this to a auth service or utils
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	if err != nil {
 		return nil, fmt.Errorf("failed to hash password: %w", err)

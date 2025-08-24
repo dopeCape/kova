@@ -49,7 +49,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         }
 
         try {
-          const apiUrl = process.env.API_URL || 'http://localhost:8080';
+          const apiUrl = process.env.API_URL;
+          console.log(apiUrl);
           const response = await fetch(`${apiUrl}/api/v1/auth/login`, {
             method: 'POST',
             headers: {

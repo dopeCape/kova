@@ -8,7 +8,7 @@ NC=\033[0m
 # Database URL (can be overridden)
 DB_URL ?= postgresql://admin:password123@localhost:5432/mydb?sslmode=disable
 
-.PHONY: help build install dev clean docker-build docker-push tui api dashboard test generate migrate-up migrate-down build-cli run-cli all
+.PHONY: help build install dev clean docker-build docker-push tui api dashboard test generate migrate-up migrate-down build-cli run-cli all seed
 
 # Helper function to check root privileges
 define check_root
@@ -18,6 +18,7 @@ define check_root
 		exit 1; \
 	fi
 endef
+
 
 # Helper function to check if kova is installed
 define check_installed
@@ -41,6 +42,9 @@ dashboard:
 dev-env:
 	cd ../../ && docker-compose up -d postgres redis
 	@echo "$(GREEN)Development services started.$(NC)"
+
+seed:
+	go run cmd/seeder/main.go
 
 dev-env-stop:
 	cd ../../ && docker-compose down

@@ -1,8 +1,14 @@
 package config
 
 import (
-	"os"
-	"strconv"
+	util "github.com/dopeCape/kova/internal/utils"
+)
+
+type Env string
+
+const (
+	DEVELOPMENT Env = "development"
+	PRODUCTION  Env = "production"
 )
 
 type Config struct {
@@ -14,7 +20,7 @@ type Config struct {
 type ServerConfig struct {
 	Port string
 	Host string
-	Env  string
+	Env  Env
 }
 
 type DatabaseConfig struct {
@@ -31,38 +37,23 @@ type AuthConfig struct {
 }
 
 func Load() *Config {
+	env := Env(util.GetEnv("ENVIRONMENT", string(DEVELOPMENT)))
 	return &Config{
 		Server: ServerConfig{
-			Port: getEnv("PORT", "8080"),
-			Host: getEnv("HOST", "localhost"),
-			Env:  getEnv("ENVIRONMENT", "dev"),
+			Port: util.GetEnv("PORT", "8000"),
+			Host: util.GetEnv("HOST", "localhost"),
+			Env:  env,
 		},
 		Database: DatabaseConfig{
-			Host:     getEnv("DB_HOST", "localhost"),
-			Port:     getEnvInt("DB_PORT", 5432),
-			User:     getEnv("DB_USER", "admin"),
-			Password: getEnv("DB_PASSWORD", "password123"),
-			Database: getEnv("DB_NAME", "mydb"),
-			SSLMode:  getEnv("DB_SSLMODE", "disable"),
+			Host:     util.GetEnv("DB_HOST", "localhost"),
+			Port:     util.GetEnvInt("DB_PORT", 5432),
+			User:     util.GetEnv("DB_USER", "admin"),
+			Password: util.GetEnv("DB_PASSWORD", "password123"),
+			Database: util.GetEnv("DB_NAME", "mydb"),
+			SSLMode:  util.GetEnv("DB_SSLMODE", "disable"),
 		},
 		Auth: AuthConfig{
-			JWTSecret: getEnv("JWT_SECRET", "849cff22c983fb7a0ee113339c6486893c83f1e5d485ef2a797b43f802b21709"),
+			JWTSecret: util.GetEnv("JWT_SECRET", "849cff22c983fb7a0ee113339c6486893c83f1e5d485ef2a797b43f802b21709"),
 		},
 	}
-}
-
-func getEnv(key, defaultValue string) string {
-	if value := os.Getenv(key); value != "" {
-		return value
-	}
-	return defaultValue
-}
-
-func getEnvInt(key string, defaultValue int) int {
-	if value := os.Getenv(key); value != "" {
-		if intValue, err := strconv.Atoi(value); err == nil {
-			return intValue
-		}
-	}
-	return defaultValue
 }
