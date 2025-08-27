@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { SharedNavbarProps } from './types';
 import { mainNavItems, getSubNavigation, getBreadcrumbs } from './navigationConfig';
+import { signOut } from 'next-auth/react';
 
 export const DesktopNavbar: React.FC<SharedNavbarProps> = ({
   navigationState,
@@ -127,12 +128,19 @@ export const DesktopNavbar: React.FC<SharedNavbarProps> = ({
               <button
                 onClick={() => updateState({ showUserMenu: !navigationState.showUserMenu })}
                 className="flex items-center space-x-2 text-sm hover:bg-zinc-900 p-2 rounded-lg transition-colors"
+                disabled={user.loading}
               >
-                <div className="w-7 h-7 bg-zinc-700 rounded-full flex items-center justify-center">
-                  <User className="w-4 h-4" />
-                </div>
-                <span className="text-zinc-300">{user.name.split(' ')[0]}</span>
-                <ChevronDown className="w-3 h-3 text-zinc-400" />
+
+                {user.loading ? <div className='w-7 h-7 rounded-full animate-spin border-[3px] border-r-0 border-t-0 border-emerald-900 absolute left-0  ' /> :
+                  <div className="w-7 h-7 bg-zinc-700 rounded-full flex items-center justify-center relative">
+                    <User className="w-4 h-4" />
+                  </div>
+                }
+                {!user.loading &&
+
+                  <ChevronDown className="w-3 h-3 text-zinc-400" />
+                }
+
               </button>
 
               {navigationState.showUserMenu && (
@@ -154,7 +162,10 @@ export const DesktopNavbar: React.FC<SharedNavbarProps> = ({
                     </button>
                   </div>
                   <div className="border-t border-zinc-700 pt-2">
-                    <button className="w-full px-4 py-2 text-left text-sm text-zinc-400 hover:bg-zinc-800 transition-colors">
+                    <button className="w-full px-4 py-2 text-left text-sm text-zinc-400 hover:bg-zinc-800 transition-colors" onClick={() => {
+                      console.log("hee what the fuck")
+                      signOut()
+                    }}>
                       Sign Out
                     </button>
                   </div>

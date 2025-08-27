@@ -8,6 +8,7 @@ import { CommandPalette } from './CommandPalette';
 import { useKeyboardShortcuts } from '@/hooks/navbar';
 import { useBreakpoint } from '@/hooks/navbar';
 import { useSession } from 'next-auth/react';
+import { usePathname } from "next/navigation"
 
 export const Navbar: React.FC<NavbarProps> = ({
   currentProject,
@@ -19,13 +20,17 @@ export const Navbar: React.FC<NavbarProps> = ({
   notifications = 0,
   systemStatus = 'operational'
 }) => {
-  const { data } = useSession()
+  const pathname = usePathname()
+  if (pathname.includes("login")) {
+    return null
+  }
+  const { data, status } = useSession()
   const user = {
     email: data?.user.email || "t@t.com",
     name: data?.user.username || "test",
     id: data?.user.id || "1",
-    role: "admin"
-
+    role: "admin",
+    loading: status === "loading",
   }
   const [navigationState, setNavigationState] = useState<NavigationState>({
     activeTab: 'dashboard',

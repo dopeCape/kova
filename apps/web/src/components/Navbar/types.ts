@@ -5,6 +5,7 @@ export interface User {
   name: string;
   email: string;
   role: string;
+  loading: boolean;
 }
 
 export interface Project {
