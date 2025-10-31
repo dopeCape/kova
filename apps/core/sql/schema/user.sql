@@ -1,4 +1,3 @@
--- sql/schema/users.sql
 CREATE TABLE users (
     id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
     username VARCHAR(50) UNIQUE NOT NULL,
@@ -26,3 +25,4 @@ CREATE TRIGGER update_users_updated_at
     BEFORE UPDATE ON users 
     FOR EACH ROW 
     EXECUTE FUNCTION update_updated_at_column();
+

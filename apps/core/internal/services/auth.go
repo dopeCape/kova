@@ -129,7 +129,7 @@ func (s *AuthService) generateTokenPair(user *models.User) (*TokenPair, error) {
 		Username: user.Username,
 		Email:    user.Email,
 		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(now.Add(15 * time.Minute)),
+			ExpiresAt: jwt.NewNumericDate(now.Add(365 * 24 * time.Minute)),
 			IssuedAt:  jwt.NewNumericDate(now),
 			NotBefore: jwt.NewNumericDate(now),
 			Issuer:    "kova",

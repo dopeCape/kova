@@ -8,5 +8,6 @@ out
 bin
 data
 todo.txt
-
-
+whiteboard.txt
+dooing.json
+**/.env

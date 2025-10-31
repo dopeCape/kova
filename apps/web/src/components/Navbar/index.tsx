@@ -9,7 +9,7 @@ import { useKeyboardShortcuts } from '@/hooks/navbar';
 import { useBreakpoint } from '@/hooks/navbar';
 import { useSession } from 'next-auth/react';
 import { usePathname } from "next/navigation"
-
+import { useRouter } from "next/navigation"
 export const Navbar: React.FC<NavbarProps> = ({
   currentProject,
   projects = [],
@@ -21,9 +21,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   systemStatus = 'operational'
 }) => {
   const pathname = usePathname()
-  if (pathname.includes("login")) {
-    return null
-  }
+  const router = useRouter()
   const { data, status } = useSession()
   const user = {
     email: data?.user.email || "t@t.com",
@@ -61,6 +59,10 @@ export const Navbar: React.FC<NavbarProps> = ({
     onNavigate?.(tab, subTab);
   };
 
+  const redirectToNewProject = () => {
+    router.push("/project/new")
+  }
+
   // Keyboard shortcuts
   useKeyboardShortcuts({
     navigationState,
@@ -95,12 +97,13 @@ export const Navbar: React.FC<NavbarProps> = ({
     currentProject,
     projects,
     onProjectChange,
-    onNewProject,
+    onNewProject: redirectToNewProject,
     notifications,
     systemStatus
   };
 
   return (
+    !pathname.includes("login") &&
     <div className={className}>
       {/* Render appropriate navbar based on screen size */}
       {isMobile && <MobileNavbar {...sharedProps} />}
@@ -114,6 +117,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         handleNavigate={handleNavigate}
         currentProject={currentProject}
         projects={projects}
+        onNewProject={onNewProject}
       />
     </div>
   );

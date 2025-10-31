@@ -1,0 +1,13 @@
+POST {{BASE_URL}}/api/v1/users/{{USER_ID}}/projects
+Authorization: Bearer {{SESSION_TOKEN}}
+
+{
+"name":"est_Project_69",
+"repo_id":1025186447,
+"repo_name":"code_insite",
+"repo_full_name":"dopeCape/Code_insite",
+"repo_url":"https://github.com/dopeCape/code_insite",
+"repo_branch":"main"
+}
+
+

@@ -6,18 +6,68 @@ package generated
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type Querier interface {
+	AccountExistsByGithubID(ctx context.Context, githubID int64) (bool, error)
+	AccountExistsByGithubUsername(ctx context.Context, githubUsername string) (bool, error)
+	AccountExistsByUserIDAndGithubID(ctx context.Context, arg AccountExistsByUserIDAndGithubIDParams) (bool, error)
+	AccountExistsForUser(ctx context.Context, arg AccountExistsForUserParams) (bool, error)
+	ActivateProject(ctx context.Context, id string) (Project, error)
+	ArchiveProject(ctx context.Context, id string) (Project, error)
+	CountAccounts(ctx context.Context) (int64, error)
+	CountAccountsByUserID(ctx context.Context, userID string) (int64, error)
+	CountProjects(ctx context.Context) (int64, error)
+	CountProjectsByStatus(ctx context.Context, status string) (int64, error)
+	CountProjectsByUserID(ctx context.Context, userID string) (int64, error)
 	CountUsers(ctx context.Context) (int64, error)
+	CreateAccount(ctx context.Context, arg CreateAccountParams) (CreateAccountRow, error)
+	CreateProject(ctx context.Context, arg CreateProjectParams) (Project, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (CreateUserRow, error)
+	DeleteAccount(ctx context.Context, id string) error
+	DeleteAccountByGithubID(ctx context.Context, githubID int64) error
+	DeleteAccountsByUserID(ctx context.Context, userID string) error
+	DeleteProject(ctx context.Context, id string) error
+	DeleteProjectsByUserID(ctx context.Context, userID string) error
 	DeleteUser(ctx context.Context, id string) error
+	GetAccountByGithubID(ctx context.Context, githubID int64) (Account, error)
+	GetAccountByGithubUsername(ctx context.Context, githubUsername string) (Account, error)
+	GetAccountByID(ctx context.Context, id string) (Account, error)
+	GetAccountWithUser(ctx context.Context, id string) (GetAccountWithUserRow, error)
+	GetAccountsByUserID(ctx context.Context, userID string) ([]GetAccountsByUserIDRow, error)
+	GetAccountsByUserIDWithTokens(ctx context.Context, userID string) ([]Account, error)
+	GetActiveProjectsByUserID(ctx context.Context, userID string) ([]Project, error)
+	GetProjectByID(ctx context.Context, id string) (Project, error)
+	GetProjectByUserIDAndName(ctx context.Context, arg GetProjectByUserIDAndNameParams) (Project, error)
+	GetProjectsByRepoID(ctx context.Context, repoID int64) ([]Project, error)
+	GetProjectsByUserID(ctx context.Context, userID string) ([]Project, error)
+	GetProjectsByUserIDAndStatus(ctx context.Context, arg GetProjectsByUserIDAndStatusParams) ([]Project, error)
+	GetUsedPorts(ctx context.Context) ([]pgtype.Int4, error)
 	GetUserByEmail(ctx context.Context, email string) (User, error)
 	GetUserByEmailOrUsername(ctx context.Context, email string) (User, error)
 	GetUserByID(ctx context.Context, id string) (User, error)
 	GetUserByUsername(ctx context.Context, username string) (User, error)
+	ListAccounts(ctx context.Context, arg ListAccountsParams) ([]ListAccountsRow, error)
+	ListProjects(ctx context.Context, arg ListProjectsParams) ([]Project, error)
+	ListProjectsByStatus(ctx context.Context, arg ListProjectsByStatusParams) ([]Project, error)
 	ListUsers(ctx context.Context, arg ListUsersParams) ([]ListUsersRow, error)
+	ProjectExistsByID(ctx context.Context, id string) (bool, error)
+	ProjectExistsByUserIDAndName(ctx context.Context, arg ProjectExistsByUserIDAndNameParams) (bool, error)
+	SearchAccounts(ctx context.Context, arg SearchAccountsParams) ([]SearchAccountsRow, error)
+	SearchAccountsByUserID(ctx context.Context, arg SearchAccountsByUserIDParams) ([]SearchAccountsByUserIDRow, error)
+	SearchProjects(ctx context.Context, arg SearchProjectsParams) ([]Project, error)
+	SearchProjectsByUserID(ctx context.Context, arg SearchProjectsByUserIDParams) ([]Project, error)
 	SearchUsers(ctx context.Context, arg SearchUsersParams) ([]SearchUsersRow, error)
+	UpdateAccount(ctx context.Context, arg UpdateAccountParams) (UpdateAccountRow, error)
+	UpdateAccountByGithubID(ctx context.Context, arg UpdateAccountByGithubIDParams) (UpdateAccountByGithubIDRow, error)
+	UpdateAccountToken(ctx context.Context, arg UpdateAccountTokenParams) (UpdateAccountTokenRow, error)
+	UpdateProject(ctx context.Context, arg UpdateProjectParams) (Project, error)
+	UpdateProjectBranch(ctx context.Context, arg UpdateProjectBranchParams) (Project, error)
+	UpdateProjectDeploymentStatus(ctx context.Context, arg UpdateProjectDeploymentStatusParams) (Project, error)
+	UpdateProjectPort(ctx context.Context, arg UpdateProjectPortParams) error
+	UpdateProjectStatus(ctx context.Context, arg UpdateProjectStatusParams) (Project, error)
 	UpdateUser(ctx context.Context, arg UpdateUserParams) (UpdateUserRow, error)
 	UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) (UpdateUserPasswordRow, error)
 	UserExistsByEmail(ctx context.Context, email string) (bool, error)

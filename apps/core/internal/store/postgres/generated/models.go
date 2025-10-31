@@ -6,7 +6,38 @@ package generated
 
 import (
 	"time"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
+
+type Account struct {
+	ID             string      `json:"id"`
+	UserID         string      `json:"user_id"`
+	GithubUsername string      `json:"github_username"`
+	GithubID       int64       `json:"github_id"`
+	AvatarUrl      pgtype.Text `json:"avatar_url"`
+	AccessToken    string      `json:"access_token"`
+	CreatedAt      time.Time   `json:"created_at"`
+	UpdatedAt      time.Time   `json:"updated_at"`
+}
+
+type Project struct {
+	ID               string      `json:"id"`
+	Name             string      `json:"name"`
+	UserID           string      `json:"user_id"`
+	RepoID           int64       `json:"repo_id"`
+	RepoName         string      `json:"repo_name"`
+	RepoFullName     string      `json:"repo_full_name"`
+	RepoUrl          string      `json:"repo_url"`
+	RepoBranch       string      `json:"repo_branch"`
+	Status           string      `json:"status"`
+	EnvVariables     []byte      `json:"env_variables"`
+	DeploymentStatus string      `json:"deployment_status"`
+	Domain           pgtype.Text `json:"domain"`
+	Port             pgtype.Int4 `json:"port"`
+	CreatedAt        time.Time   `json:"created_at"`
+	UpdatedAt        time.Time   `json:"updated_at"`
+}
 
 type User struct {
 	ID           string    `json:"id"`

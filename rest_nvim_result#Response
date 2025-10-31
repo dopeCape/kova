@@ -1,0 +1,7 @@
+### create_project#16
+POST http://localhost:8000/api/v1/users/e765b8d0-ca5f-46cf-a737-c7d25c815a40/projects
+HTTP/1.1 409 Conflict
+
+# @_RES
+"{\"error\":\"project with this name already exists for this user\",\"code\":\"PROJECT_EXISTS\"}"
+# @_END

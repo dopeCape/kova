@@ -1,0 +1,176 @@
+{
+  "railpackVersion": "dev",
+  "plan": {
+    "steps": [
+      {
+        "name": "packages:mise",
+        "inputs": [
+          {
+            "image": "ghcr.io/railwayapp/railpack-builder:latest"
+          }
+        ],
+        "commands": [
+          {
+            "path": "/mise/shims"
+          },
+          {
+            "path": "/etc/mise/config.toml",
+            "name": "mise.toml",
+            "customName": "create mise config"
+          },
+          {
+            "cmd": "sh -c 'mise trust -a \u0026\u0026 mise install'",
+            "customName": "install mise packages: go"
+          }
+        ],
+        "assets": {
+          "mise.toml": "[tools]\n  [tools.go]\n    version = \"1.24.3\"\n"
+        },
+        "variables": {
+          "MISE_CACHE_DIR": "/mise/cache",
+          "MISE_CONFIG_DIR": "/mise",
+          "MISE_DATA_DIR": "/mise",
+          "MISE_INSTALLS_DIR": "/mise/installs",
+          "MISE_NODE_VERIFY": "false",
+          "MISE_SHIMS_DIR": "/mise/shims"
+        }
+      },
+      {
+        "name": "install",
+        "inputs": [
+          {
+            "step": "packages:mise"
+          }
+        ],
+        "commands": [
+          {
+            "path": "/go/bin"
+          },
+          {
+            "src": "go.mod",
+            "dest": "go.mod"
+          },
+          {
+            "src": "go.sum",
+            "dest": "go.sum"
+          },
+          {
+            "cmd": "go mod download"
+          }
+        ],
+        "secrets": [
+          "*"
+        ],
+        "variables": {
+          "CGO_ENABLED": "0",
+          "GOBIN": "/go/bin",
+          "GOPATH": "/go"
+        },
+        "caches": [
+          "go-build"
+        ]
+      },
+      {
+        "name": "build",
+        "inputs": [
+          {
+            "step": "install"
+          },
+          {
+            "local": true,
+            "include": [
+              "."
+            ]
+          }
+        ],
+        "commands": [
+          {
+            "cmd": "go build -ldflags=\"-w -s\" -o out ./cmd/api"
+          }
+        ],
+        "secrets": [
+          "*"
+        ],
+        "caches": [
+          "go-build"
+        ]
+      },
+      {
+        "name": "packages:apt:runtime",
+        "inputs": [
+          {
+            "image": "ghcr.io/railwayapp/railpack-runtime:latest"
+          }
+        ],
+        "commands": [
+          {
+            "cmd": "sh -c 'apt-get update \u0026\u0026 apt-get install -y tzdata'",
+            "customName": "install apt packages: tzdata"
+          }
+        ],
+        "caches": [
+          "apt",
+          "apt-lists"
+        ]
+      }
+    ],
+    "caches": {
+      "apt": {
+        "directory": "/var/cache/apt",
+        "type": "locked"
+      },
+      "apt-lists": {
+        "directory": "/var/lib/apt/lists",
+        "type": "locked"
+      },
+      "go-build": {
+        "directory": "/root/.cache/go-build",
+        "type": "shared"
+      }
+    },
+    "deploy": {
+      "base": {
+        "step": "packages:apt:runtime"
+      },
+      "inputs": [
+        {
+          "step": "build",
+          "include": [
+            "."
+          ]
+        }
+      ],
+      "startCommand": "./out"
+    }
+  },
+  "resolvedPackages": {
+    "go": {
+      "name": "go",
+      "requestedVersion": "1.24.3",
+      "resolvedVersion": "1.24.3",
+      "source": "go.mod"
+    }
+  },
+  "metadata": {
+    "goMod": "true",
+    "providers": "golang"
+  },
+  "detectedProviders": [
+    "golang"
+  ],
+  "logs": [
+    {
+      "Level": "info",
+      "Msg": "Detected Golang"
+    },
+    {
+      "Level": "info",
+      "Msg": "Using go mod"
+    },
+    {
+      "Level": "info",
+      "Msg": "Building command: api"
+    }
+  ],
+  "success": true
+}

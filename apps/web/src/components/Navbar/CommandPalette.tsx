@@ -10,6 +10,7 @@ interface CommandPaletteProps {
   handleNavigate: (tab: string, subTab?: string) => void;
   currentProject?: string;
   projects: Project[];
+  onNewProject: (() => void) | undefined;
 }
 
 export const CommandPalette: React.FC<CommandPaletteProps> = ({
@@ -17,7 +18,8 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
   updateState,
   handleNavigate,
   currentProject,
-  projects
+  projects,
+  onNewProject
 }) => {
   const commandRef = useRef<HTMLInputElement>(null);
 
@@ -34,7 +36,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
     navigationState.activeTab,
     currentProject,
     handleNavigate,
-    () => alert('New project')
+    onNewProject
   );
 
   const filteredCommands = commands.filter(cmd =>
